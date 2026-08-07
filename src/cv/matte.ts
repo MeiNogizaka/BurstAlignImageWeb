@@ -11,6 +11,7 @@
 // the model is bundled in this repo under public/models/u2netp.onnx instead and
 // served same-origin.
 import type { CV } from "./cvRuntime";
+import { AppError } from "../shared";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/u2netp.onnx`;
 const INPUT_SIZE = 320;
@@ -54,7 +55,7 @@ export async function loadMatteSession(onProgress?: MatteProgress): Promise<any>
 async function fetchWithProgress(url: string, onProgress?: MatteProgress): Promise<Uint8Array> {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`被写体切り抜きモデルの取得に失敗しました (HTTP ${res.status})`);
+    throw new AppError("matteModelFetchFailed", { status: res.status });
   }
   const total = Number(res.headers.get("content-length")) || null;
   const reader = res.body?.getReader();

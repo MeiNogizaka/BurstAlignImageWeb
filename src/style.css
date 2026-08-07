@@ -40,8 +40,31 @@ header {
   margin: 0 auto;
 }
 
+.header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
 .subtitle { margin: 0; color: var(--muted); }
+
+.lang-toggle {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.lang-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 main {
   max-width: 960px;

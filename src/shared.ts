@@ -40,13 +40,40 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
 
 export type StageKey = "align" | "background" | "detect" | "composite_all" | "finalize";
 
-export const STAGE_LABELS: Record<StageKey, string> = {
-  align: "位置合わせ中",
-  background: "背景を生成中",
-  detect: "被写体を検出中",
-  composite_all: "合成画像を生成中(全フレーム重ね合わせ)",
-  finalize: "仕上げ中",
+/** i18n.ts keys for each stage's progress label -- kept here (not the label text itself) so
+ * this file stays language-free; only the main thread (which has the current Lang) calls
+ * `t(lang, STAGE_KEYS[stage])`. */
+export const STAGE_KEYS: Record<StageKey, string> = {
+  align: "stageAlign",
+  background: "stageBackground",
+  detect: "stageDetect",
+  composite_all: "stageCompositeAll",
+  finalize: "stageFinalize",
 };
+
+/** A translatable message: an i18n.ts dictionary key plus the values to interpolate into it.
+ * Used for anything generated in the worker (reasons, warnings, thrown errors) instead of a
+ * literal string, since the worker has no notion of the user's selected language -- only the
+ * main thread does, and it calls `t(lang, code, params)` at render time. */
+export interface I18nMessage {
+  code: string;
+  params?: Record<string, string | number>;
+}
+
+/** Thrown from worker-side code (pipeline.ts, matte.ts, cvRuntime.ts) instead of a plain
+ * `Error` with baked-in Japanese/English text, so the failure reason survives as data
+ * (`code`/`params`) all the way to the main thread's `describeError`-equivalent handling,
+ * which can translate it into whichever language is currently selected. */
+export class AppError extends Error {
+  code: string;
+  params?: Record<string, string | number>;
+  constructor(code: string, params?: Record<string, string | number>) {
+    super(code);
+    this.name = "AppError";
+    this.code = code;
+    this.params = params;
+  }
+}
 
 export type FrameStatus = "reference" | "ok" | "failed";
 
@@ -54,7 +81,7 @@ export interface AlignedFrameResult {
   filename: string;
   status: FrameStatus;
   inliers: number | null;
-  reason: string | null;
+  reason: I18nMessage | null;
   outputName: string | null;
   blob: Blob | null;
   thumbBlob: Blob | null;
@@ -76,7 +103,7 @@ export interface PipelineResult {
   aligned: AlignedFrameResult[];
   merged: ImageOutput | null;
   compositeAll: CompositeAllOutput | null;
-  warnings: string[];
+  warnings: I18nMessage[];
   zipBlob: Blob | null;
 }
 
@@ -110,6 +137,13 @@ export interface ResultMessage {
 
 export interface ErrorMessage {
   type: "error";
+  /** i18n code for known application-level failures (AppError); absent for raw/unexpected
+   * errors (a decoded OpenCV C++ exception, a generic JS error), which can't be pre-translated
+   * since their text comes from the browser/library itself. */
+  code?: string;
+  params?: Record<string, string | number>;
+  /** Always present: the translated (if `code` was set) or raw fallback message, for callers
+   * that don't have -- or don't want to depend on -- the i18n dictionary. */
   message: string;
 }
 

@@ -5,7 +5,8 @@
 import { zipSync, type Zippable } from "fflate";
 import { loadCv } from "../cv/cvRuntime";
 import { runPipeline } from "../cv/pipeline";
-import type { PipelineResult, WorkerRequest, WorkerResponse } from "../shared";
+import { AppError, type PipelineResult, type WorkerRequest, type WorkerResponse } from "../shared";
+import { t } from "../i18n";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -37,21 +38,34 @@ async function buildZip(result: PipelineResult): Promise<Blob | null> {
   return new Blob([zipped], { type: "application/zip" });
 }
 
-/** OpenCV.js's embind bindings surface a C++-level `cv::Exception` as a bare number (a pointer
- * into the WASM heap), not a JS Error -- `String(err)` on that is a meaningless digit string.
- * `cv.exceptionFromPtr` (present on the loaded module once available) decodes it back into a
- * real message. */
-function describeError(err: unknown, cv: any): string {
+interface DescribedError {
+  message: string;
+  code?: string;
+  params?: Record<string, string | number>;
+}
+
+/** Translates a caught error into `{message, code?, params?}` for postMessage. `AppError`
+ * (thrown deliberately, from pipeline.ts/matte.ts/cvRuntime.ts) carries its own i18n code --
+ * the worker doesn't know the user's selected language, so `message` here is just a Japanese
+ * fallback (via `t("ja", ...)`) for callers that ignore `code`; the main thread, which does
+ * know the language, re-translates `code`+`params` itself. OpenCV.js's embind bindings also
+ * surface a C++-level `cv::Exception` as a bare number (a pointer into the WASM heap) rather
+ * than a JS Error -- `String(err)` on that is a meaningless digit string, so `cv.exceptionFromPtr`
+ * decodes it back into a real (but not translatable -- it's OpenCV's own text) message. */
+function describeError(err: unknown, cv: any): DescribedError {
+  if (err instanceof AppError) {
+    return { message: t("ja", err.code, err.params), code: err.code, params: err.params };
+  }
   if (typeof err === "number" && cv?.exceptionFromPtr) {
     try {
       const decoded = cv.exceptionFromPtr(err);
-      if (decoded?.msg) return decoded.msg;
+      if (decoded?.msg) return { message: decoded.msg };
     } catch {
       // fall through to the generic cases below
     }
   }
-  if (err instanceof Error) return err.message;
-  return String(err);
+  if (err instanceof Error) return { message: err.message };
+  return { message: String(err) };
 }
 
 ctx.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
@@ -78,6 +92,6 @@ ctx.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
 
     post({ type: "result", result });
   } catch (err) {
-    post({ type: "error", message: describeError(err, cv) });
+    post({ type: "error", ...describeError(err, cv) });
   }
 });

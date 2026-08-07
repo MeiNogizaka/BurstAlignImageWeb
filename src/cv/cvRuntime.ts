@@ -33,6 +33,8 @@
 // it ever touches a real Promise's resolve() -- once that's gone, native
 // Promise/await machinery treats it as an ordinary object and resolves
 // immediately.
+import { AppError } from "../shared";
+
 export type CV = any;
 
 const MODEL_SCRIPT_URL = `${import.meta.env.BASE_URL}opencv.js`;
@@ -44,7 +46,7 @@ export function loadCv(): Promise<CV> {
     cvPromise = fetch(MODEL_SCRIPT_URL)
       .then((res) => {
         if (!res.ok) {
-          throw new Error(`OpenCV.jsの読み込みに失敗しました (HTTP ${res.status})`);
+          throw new AppError("openCvLoadFailed", { status: res.status });
         }
         return res.text();
       })

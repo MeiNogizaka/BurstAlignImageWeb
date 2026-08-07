@@ -1,12 +1,13 @@
 /// <reference types="vite/client" />
 import "./style.css";
 import { decodeUploadedFile, IngestError } from "./ingest";
+import { detectInitialLang, storeLang, t, type Lang, type Params } from "./i18n";
 import {
   DEFAULT_OPTIONS,
   MAX_FILES,
   MIN_FILES,
   MAX_TOTAL_BYTES,
-  STAGE_LABELS,
+  STAGE_KEYS,
   type AlignedFrameResult,
   type PipelineOptions,
   type PipelineResult,
@@ -14,6 +15,9 @@ import {
   type WorkerResponse,
 } from "./shared";
 
+let lang: Lang = detectInitialLang();
+
+const langToggleBtn = document.getElementById("lang-toggle") as HTMLButtonElement;
 const dropzone = document.getElementById("dropzone") as HTMLDivElement;
 const fileInput = document.getElementById("file-input") as HTMLInputElement;
 const fileListEl = document.getElementById("file-list") as HTMLUListElement;
@@ -66,6 +70,51 @@ let resultObjectUrls: string[] = [];
 let worker: Worker | null = null;
 let running = false;
 
+/** The most recent successfully-rendered result, kept so the results panel can be
+ * re-rendered in the newly selected language without re-running the pipeline. */
+let lastResult: PipelineResult | null = null;
+
+/** Tracks the currently displayed status line as data (an i18n key/params, or a worker error's
+ * code/params/raw fallback) rather than pre-rendered text, so a language switch can regenerate
+ * it correctly instead of leaving stale text in the old language. */
+type StatusState =
+  | { kind: "plain"; key: string; params?: Params; isError: boolean }
+  | { kind: "workerError"; code?: string; params?: Params; rawMessage: string };
+let currentStatus: StatusState | null = null;
+
+const LANG_NAMES: Record<Lang, string> = { ja: "日本語", en: "English" };
+
+function applyStaticTranslations() {
+  document.documentElement.lang = lang;
+  document.title = t(lang, "appTitle");
+  langToggleBtn.textContent = LANG_NAMES[lang === "ja" ? "en" : "ja"];
+  langToggleBtn.title = LANG_NAMES[lang === "ja" ? "en" : "ja"];
+
+  for (const el of document.querySelectorAll<HTMLElement>("[data-i18n]")) {
+    const key = el.dataset.i18n;
+    if (key) el.textContent = t(lang, key);
+  }
+  for (const el of document.querySelectorAll<HTMLElement>("[data-i18n-title]")) {
+    const key = el.dataset.i18nTitle;
+    if (key) el.title = t(lang, key);
+  }
+  for (const el of document.querySelectorAll<HTMLImageElement>("[data-i18n-alt]")) {
+    const key = el.dataset.i18nAlt;
+    if (key) el.alt = t(lang, key);
+  }
+}
+
+function setLang(next: Lang) {
+  lang = next;
+  storeLang(lang);
+  applyStaticTranslations();
+  refreshFileList();
+  renderStatus();
+  if (lastResult) renderResults(lastResult);
+}
+
+langToggleBtn.addEventListener("click", () => setLang(lang === "ja" ? "en" : "ja"));
+
 function ensureReferenceFile() {
   if (selectedFiles.length === 0) {
     referenceFile = null;
@@ -105,7 +154,7 @@ function refreshFileList() {
     const isReference = file === referenceFile;
     const refLabel = document.createElement("label");
     refLabel.className = "ref-toggle" + (isReference ? " is-reference" : "");
-    refLabel.title = "この写真を位置合わせの基準フレームにします(全フレームがこの写真の座標系に揃えられます)。";
+    refLabel.title = t(lang, "refToggleTitle");
     const refInput = document.createElement("input");
     refInput.type = "radio";
     refInput.name = "reference-select";
@@ -115,14 +164,14 @@ function refreshFileList() {
       refreshFileList();
     });
     refLabel.appendChild(refInput);
-    refLabel.appendChild(document.createTextNode("基準"));
+    refLabel.appendChild(document.createTextNode(t(lang, "refLabel")));
     li.appendChild(refLabel);
 
     const moveUpBtn = document.createElement("button");
     moveUpBtn.type = "button";
     moveUpBtn.className = "move-btn";
     moveUpBtn.textContent = "↑";
-    moveUpBtn.title = "前に移動";
+    moveUpBtn.title = t(lang, "moveUpTitle");
     moveUpBtn.disabled = index === 0;
     moveUpBtn.addEventListener("click", () => moveFile(index, -1));
     li.appendChild(moveUpBtn);
@@ -131,7 +180,7 @@ function refreshFileList() {
     moveDownBtn.type = "button";
     moveDownBtn.className = "move-btn";
     moveDownBtn.textContent = "↓";
-    moveDownBtn.title = "後に移動";
+    moveDownBtn.title = t(lang, "moveDownTitle");
     moveDownBtn.disabled = index === selectedFiles.length - 1;
     moveDownBtn.addEventListener("click", () => moveFile(index, 1));
     li.appendChild(moveDownBtn);
@@ -140,7 +189,7 @@ function refreshFileList() {
     removeBtn.type = "button";
     removeBtn.className = "move-btn";
     removeBtn.textContent = "×";
-    removeBtn.title = "削除";
+    removeBtn.title = t(lang, "removeTitle");
     removeBtn.addEventListener("click", () => {
       selectedFiles = selectedFiles.filter((f) => f !== file);
       refreshFileList();
@@ -170,7 +219,7 @@ function addFiles(fileListLike: FileList | File[]) {
   selectedFiles = selectedFiles.concat(accepted);
   refreshFileList();
   if (incoming.length > accepted.length) {
-    setStatus(`アップロードできる画像は最大${MAX_FILES}枚です。超過分は追加されませんでした。`, true);
+    showStatus("statusTooManyFiles", { max: MAX_FILES }, true);
   }
 }
 
@@ -201,6 +250,36 @@ function setStatus(text: string, isError?: boolean) {
   statusEl.classList.toggle("error", Boolean(isError));
 }
 
+/** Renders `currentStatus` in the current language -- called both when the status changes and
+ * when the language is switched, so a language change re-translates whatever's on screen. */
+function renderStatus() {
+  if (!currentStatus) {
+    setStatus("");
+    return;
+  }
+  if (currentStatus.kind === "plain") {
+    setStatus(t(lang, currentStatus.key, currentStatus.params), currentStatus.isError);
+    return;
+  }
+  const inner = currentStatus.code ? t(lang, currentStatus.code, currentStatus.params) : currentStatus.rawMessage;
+  setStatus(t(lang, "statusErrorPrefix", { message: inner }), true);
+}
+
+function showStatus(key: string, params?: Params, isError = false) {
+  currentStatus = { kind: "plain", key, params, isError };
+  renderStatus();
+}
+
+function showWorkerError(code: string | undefined, params: Params | undefined, rawMessage: string) {
+  currentStatus = { kind: "workerError", code, params, rawMessage };
+  renderStatus();
+}
+
+function clearStatus() {
+  currentStatus = null;
+  renderStatus();
+}
+
 function setProgress(visible: boolean, percent: number, label: string) {
   progressEl.hidden = !visible;
   if (visible) {
@@ -210,9 +289,9 @@ function setProgress(visible: boolean, percent: number, label: string) {
 }
 
 function statusLabel(status: AlignedFrameResult["status"]): string {
-  if (status === "reference") return "基準フレーム";
-  if (status === "ok") return "位置合わせ成功";
-  if (status === "failed") return "位置合わせ失敗";
+  if (status === "reference") return t(lang, "badgeReference");
+  if (status === "ok") return t(lang, "badgeOk");
+  if (status === "failed") return t(lang, "badgeFailed");
   return status;
 }
 
@@ -227,7 +306,7 @@ function objectUrlFor(blob: Blob): string {
   return url;
 }
 
-function renderResults(result: PipelineResult) {
+function renderResults(result: PipelineResult, scrollIntoView = false) {
   revokeResultUrls();
   resultsGrid.innerHTML = "";
   warningsEl.hidden = true;
@@ -237,7 +316,8 @@ function renderResults(result: PipelineResult) {
 
   if (result.warnings.length > 0) {
     warningsEl.hidden = false;
-    warningsEl.innerHTML = "<strong>注意:</strong><ul>" + result.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("") + "</ul>";
+    const items = result.warnings.map((w) => `<li>${escapeHtml(t(lang, w.code, w.params))}</li>`).join("");
+    warningsEl.innerHTML = `<strong>${escapeHtml(t(lang, "warningsHeading"))}</strong><ul>${items}</ul>`;
   }
 
   for (const frame of result.aligned) {
@@ -268,14 +348,14 @@ function renderResults(result: PipelineResult) {
     if (frame.status !== "failed" && frame.inliers != null) {
       const inliers = document.createElement("div");
       inliers.className = "card-reason";
-      inliers.textContent = `インライア数: ${frame.inliers}`;
+      inliers.textContent = t(lang, "inliersLabel", { n: frame.inliers });
       body.appendChild(inliers);
     }
 
     if (frame.reason) {
       const reason = document.createElement("div");
       reason.className = "card-reason";
-      reason.textContent = frame.reason;
+      reason.textContent = t(lang, frame.reason.code, frame.reason.params);
       body.appendChild(reason);
     }
 
@@ -283,7 +363,7 @@ function renderResults(result: PipelineResult) {
       const a = document.createElement("a");
       a.href = frameUrl;
       a.className = "button-link";
-      a.textContent = "ダウンロード";
+      a.textContent = t(lang, "downloadButton");
       a.download = frame.outputName;
       body.appendChild(document.createElement("br"));
       body.appendChild(a);
@@ -316,7 +396,7 @@ function renderResults(result: PipelineResult) {
   }
 
   resultsPanel.hidden = false;
-  resultsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (scrollIntoView) resultsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function stemOf(filename: string): string {
@@ -364,19 +444,19 @@ function getWorker(): Worker {
 runBtn.addEventListener("click", async () => {
   if (running || selectedFiles.length < MIN_FILES) return;
   if (!optAligned.checked && !optMerged.checked && !optCompositeAll.checked) {
-    setStatus("出力形式を少なくとも1つ選択してください。", true);
+    showStatus("statusSelectOutput", undefined, true);
     return;
   }
 
   running = true;
   runBtn.disabled = true;
-  setStatus("画像を読み込んでいます…");
-  setProgress(true, 0, "画像を読み込み中…");
+  showStatus("statusLoadingImages");
+  setProgress(true, 0, t(lang, "progressLoadingImages"));
 
   let totalBytes = 0;
   for (const f of selectedFiles) totalBytes += f.size;
   if (totalBytes > MAX_TOTAL_BYTES) {
-    setStatus("アップロード合計サイズが大きすぎます。", true);
+    showStatus("statusTotalTooLarge", undefined, true);
     setProgress(false, 0, "");
     running = false;
     runBtn.disabled = selectedFiles.length < MIN_FILES;
@@ -391,7 +471,11 @@ runBtn.addEventListener("click", async () => {
   } catch (err) {
     for (const b of bitmaps) b.close();
     setProgress(false, 0, "");
-    setStatus(err instanceof IngestError ? err.message : `エラー: ${String(err)}`, true);
+    if (err instanceof IngestError) {
+      showStatus(err.code, err.params, true);
+    } else {
+      showWorkerError(undefined, undefined, String(err));
+    }
     running = false;
     runBtn.disabled = selectedFiles.length < MIN_FILES;
     return;
@@ -400,30 +484,32 @@ runBtn.addEventListener("click", async () => {
   const options = readOptions();
   const files = selectedFiles.map((f, i) => ({ name: f.name, bitmap: bitmaps[i] }));
 
-  setStatus("処理中です。初回はモデルのダウンロードも行うため、写真の枚数や解像度によっては数十秒〜数分かかることがあります…");
+  showStatus("statusProcessing");
 
   const w = getWorker();
 
   const onMessage = (event: MessageEvent<WorkerResponse>) => {
     const msg = event.data;
     if (msg.type === "progress") {
-      const label = msg.total > 1 ? `${STAGE_LABELS[msg.stage]} (${msg.current}/${msg.total})` : STAGE_LABELS[msg.stage];
+      const stageLabel = t(lang, STAGE_KEYS[msg.stage]);
+      const label = msg.total > 1 ? t(lang, "progressWithCount", { stage: stageLabel, current: msg.current, total: msg.total }) : stageLabel;
       setProgress(true, msg.percent, label);
     } else if (msg.type === "model-progress") {
       const totalMb = msg.totalBytes ? (msg.totalBytes / 1_000_000).toFixed(1) : "?";
       const loadedMb = (msg.loadedBytes / 1_000_000).toFixed(1);
-      setStatus(`被写体切り抜きモデルを読み込み中… (${loadedMb} / ${totalMb} MB)`);
+      showStatus("statusModelLoading", { loaded: loadedMb, total: totalMb });
     } else if (msg.type === "result") {
       w.removeEventListener("message", onMessage);
       setProgress(false, 0, "");
-      setStatus("処理が完了しました。");
-      renderResults(msg.result);
+      showStatus("statusComplete");
+      lastResult = msg.result;
+      renderResults(msg.result, true);
       running = false;
       runBtn.disabled = selectedFiles.length < MIN_FILES;
     } else if (msg.type === "error") {
       w.removeEventListener("message", onMessage);
       setProgress(false, 0, "");
-      setStatus(`エラー: ${msg.message}`, true);
+      showWorkerError(msg.code, msg.params, msg.message);
       running = false;
       runBtn.disabled = selectedFiles.length < MIN_FILES;
     }
@@ -453,6 +539,7 @@ function resetAll() {
   optConfidentAlphaThreshold.value = String(DEFAULT_OPTIONS.confidentAlphaThreshold);
   optOverlapBlendSigma.value = String(DEFAULT_OPTIONS.overlapBlendSigmaPx);
 
+  lastResult = null;
   revokeResultUrls();
   resultsPanel.hidden = true;
   resultsGrid.innerHTML = "";
@@ -463,9 +550,10 @@ function resetAll() {
   downloadAllLink.hidden = true;
   setProgress(false, 0, "");
 
-  setStatus("");
+  clearStatus();
 }
 
 resetBtn.addEventListener("click", resetAll);
 
+applyStaticTranslations();
 refreshFileList();

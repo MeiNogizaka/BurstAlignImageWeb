@@ -4,7 +4,20 @@
 // transferable postMessage.
 import { MAX_FILE_BYTES, MAX_PROCESSING_PIXELS, MAX_TOTAL_PIXELS } from "./shared";
 
-export class IngestError extends Error {}
+/** Carries an i18n.ts code + params instead of a baked-in-language message, same rationale as
+ * `AppError` (shared.ts) for the worker side -- this runs on the main thread, which does know
+ * the current language, but keeping the same {code, params} shape lets callers translate at
+ * render/re-render time (e.g. after a language switch) instead of only once at throw time. */
+export class IngestError extends Error {
+  code: string;
+  params?: Record<string, string | number>;
+  constructor(code: string, params?: Record<string, string | number>) {
+    super(code);
+    this.name = "IngestError";
+    this.code = code;
+    this.params = params;
+  }
+}
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/jpg", "image/png"]);
 
@@ -24,24 +37,24 @@ function looksLikeImage(file: File): boolean {
  */
 export async function decodeUploadedFile(file: File): Promise<ImageBitmap> {
   if (!looksLikeImage(file)) {
-    throw new IngestError(`未対応のファイル形式です: ${file.name}`);
+    throw new IngestError("ingestUnsupportedFormat", { filename: file.name });
   }
   if (file.size > MAX_FILE_BYTES) {
-    throw new IngestError(`ファイルサイズが大きすぎます: ${file.name}`);
+    throw new IngestError("ingestFileTooLarge", { filename: file.name });
   }
 
   let probe: ImageBitmap;
   try {
     probe = await createImageBitmap(file, { imageOrientation: "from-image" });
   } catch {
-    throw new IngestError(`画像として読み込めませんでした: ${file.name}`);
+    throw new IngestError("ingestDecodeFailed", { filename: file.name });
   }
 
   const { width, height } = probe;
   const totalPixels = width * height;
   if (totalPixels > MAX_TOTAL_PIXELS) {
     probe.close();
-    throw new IngestError(`画像の解像度が大きすぎます: ${file.name} (${width}x${height})`);
+    throw new IngestError("ingestTooHighRes", { filename: file.name, width, height });
   }
 
   if (totalPixels <= MAX_PROCESSING_PIXELS) {
@@ -62,6 +75,6 @@ export async function decodeUploadedFile(file: File): Promise<ImageBitmap> {
       resizeQuality: "high",
     });
   } catch {
-    throw new IngestError(`画像として読み込めませんでした: ${file.name}`);
+    throw new IngestError("ingestDecodeFailed", { filename: file.name });
   }
 }

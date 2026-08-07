@@ -9,7 +9,7 @@ import { medianStack } from "./background";
 import { foregroundMask } from "./detect";
 import { loadMatteSession, loadOrt, type MatteProgress } from "./matte";
 import { compositeAllSubjects } from "./composite";
-import type { AlignedFrameResult, PipelineOptions, PipelineResult, StageKey } from "../shared";
+import { AppError, type AlignedFrameResult, type I18nMessage, type PipelineOptions, type PipelineResult, type StageKey } from "../shared";
 
 export interface PipelineInputFile {
   name: string;
@@ -79,7 +79,7 @@ export async function runPipeline(
     filename: string;
     status: "reference" | "ok" | "failed";
     inliers: number | null;
-    reason: string | null;
+    reason: I18nMessage | null;
     warped: any | null;
   }
 
@@ -109,7 +109,7 @@ export async function runPipeline(
 
     if (Hscaled === null || inliers < options.minInliers) {
       img.delete();
-      const reason = `only ${inliers}/${options.minInliers} required inlier matches after RANSAC`;
+      const reason: I18nMessage = { code: "lowInliersReason", params: { inliers, minInliers: options.minInliers } };
       frameEntries.push({ filename: filenames[i], status: "failed", inliers, reason, warped: null });
       report("align", i + 1, n);
       continue;
@@ -128,7 +128,7 @@ export async function runPipeline(
   const okEntries = frameEntries.filter((f) => f.status !== "failed");
   if (okEntries.length === 0) {
     for (const m of masks) m.delete();
-    throw new Error("全てのフレームで位置合わせに失敗しました。写真の枚数や被写体が背景を覆う割合を確認してください。");
+    throw new AppError("allFramesFailed");
   }
 
   let combinedMask = masks[0].clone();
@@ -175,9 +175,14 @@ export async function runPipeline(
     });
   }
 
-  const warnings: string[] = [];
+  const warnings: I18nMessage[] = [];
   for (const fr of frameEntries) {
-    if (fr.status === "failed") warnings.push(`${fr.filename} skipped: ${fr.reason}`);
+    if (fr.status === "failed") {
+      warnings.push({
+        code: "frameSkippedLowInliers",
+        params: { filename: fr.filename, inliers: fr.inliers ?? 0, minInliers: options.minInliers },
+      });
+    }
   }
 
   const refStem = stemOf(filenames[refIndex]);
@@ -207,10 +212,7 @@ export async function runPipeline(
 
     for (let i = 0; i < croppedFrames.length; i++) {
       if (oversizedList[i] && cv.countNonZero(masksDetect[i]) === 0) {
-        warnings.push(
-          `${croppedNames[i]}: 検出された動体が「被写体サイズの上限」を超えていたため、この写真の被写体は合成画像に含まれていません。` +
-            "上限を上げると含まれる可能性があります。",
-        );
+        warnings.push({ code: "subjectOversizedExcluded", params: { filename: croppedNames[i] } });
       }
     }
 
@@ -237,7 +239,7 @@ export async function runPipeline(
         (current, total) => report("composite_all", current, total),
       );
       if (usedCount === 0) {
-        warnings.push("動く被写体が検出されなかったため、全フレーム重ね合わせ画像は生成されませんでした。");
+        warnings.push({ code: "noSubjectDetected" });
       } else {
         const saved = await saveOutput(cv, composite);
         compositeAllResult = { outputName: `${refStem}_composite.jpg`, ...saved, frameCount: usedCount };

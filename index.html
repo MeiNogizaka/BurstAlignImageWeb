@@ -7,108 +7,111 @@
 </head>
 <body>
 <header>
-  <h1>連写写真 背景位置合わせツール</h1>
-  <p class="subtitle">手持ち連写で撮った写真の「共通の背景領域」を検出して位置合わせ・クロップします。</p>
-  <p class="subtitle">このページはブラウザ内で完結して動作します。画像はサーバーにアップロードされません。</p>
+  <div class="header-top">
+    <h1 data-i18n="appTitle">連写写真 背景位置合わせツール</h1>
+    <button id="lang-toggle" type="button" class="lang-toggle"></button>
+  </div>
+  <p class="subtitle" data-i18n="appSubtitle1">手持ち連写で撮った写真の「共通の背景領域」を検出して位置合わせ・クロップします。</p>
+  <p class="subtitle" data-i18n="appSubtitle2">このページはブラウザ内で完結して動作します。画像はサーバーにアップロードされません。</p>
 </header>
 
 <main>
   <section class="panel" id="upload-panel">
     <div id="dropzone" class="dropzone">
-      <p>ここに画像をドラッグ&ドロップ、またはクリックして選択</p>
-      <p class="hint">JPEG / PNG、2〜8枚(同一シーンの連写写真を推奨)。20MPを超える画像は自動的に20MPまで縮小されます</p>
+      <p data-i18n="dropzoneMain">ここに画像をドラッグ&ドロップ、またはクリックして選択</p>
+      <p class="hint" data-i18n="dropzoneHint">JPEG / PNG、2〜8枚(同一シーンの連写写真を推奨)。20MPを超える画像は自動的に20MPまで縮小されます</p>
       <input id="file-input" type="file" accept="image/jpeg,image/png" multiple hidden />
     </div>
-    <p class="hint" id="file-list-hint" hidden>番号は合成時の重ね順です。↑↓ボタンで並び替えられます。「基準」を選んだ写真が位置合わせの基準フレームになります。</p>
+    <p class="hint" id="file-list-hint" data-i18n="fileListHint" hidden>番号は合成時の重ね順です。↑↓ボタンで並び替えられます。「基準」を選んだ写真が位置合わせの基準フレームになります。</p>
     <ul id="file-list" class="file-list"></ul>
 
-    <div class="options-label">出力する画像の種類</div>
+    <div class="options-label" data-i18n="outputOptionsLabel">出力する画像の種類</div>
     <div class="options">
-      <label class="checkbox" title="各写真を共通の背景領域に位置合わせ・クロップした画像を出力します。">
+      <label class="checkbox" data-i18n-title="optAlignedTitle" title="各写真を共通の背景領域に位置合わせ・クロップした画像を出力します。">
         <input type="checkbox" id="opt-aligned" checked />
-        位置合わせ&クロップ画像(各写真)
+        <span data-i18n="optAlignedLabel">位置合わせ&クロップ画像(各写真)</span>
       </label>
-      <label class="checkbox" title="中央値スタッキングで動く被写体を消去した、背景だけの画像を出力します。">
+      <label class="checkbox" data-i18n-title="optMergedTitle" title="中央値スタッキングで動く被写体を消去した、背景だけの画像を出力します。">
         <input type="checkbox" id="opt-merged" checked />
-        合成背景のみ画像(動く被写体を消去)
+        <span data-i18n="optMergedLabel">合成背景のみ画像(動く被写体を消去)</span>
       </label>
-      <label class="checkbox" title="動く被写体をAIで切り抜き、全フレーム分を合成背景の上に重ねて出力します。">
+      <label class="checkbox" data-i18n-title="optCompositeAllTitle" title="動く被写体をAIで切り抜き、全フレーム分を合成背景の上に重ねて出力します。">
         <input type="checkbox" id="opt-composite-all" checked />
-        被写体を残した合成画像(全フレームを重ね合わせ)
+        <span data-i18n="optCompositeAllLabel">被写体を残した合成画像(全フレームを重ね合わせ)</span>
       </label>
     </div>
 
-    <div class="options-label">重なりの扱い</div>
+    <div class="options-label" data-i18n="overlapLabel">重なりの扱い</div>
     <div class="options">
-      <label class="select" title="全フレーム重ね合わせで複数の被写体がはっきり重なったとき、どちらの色を手前に描画するかを選びます(写真の並び順基準)。">
-        重なった場合の優先順位
+      <label class="select" data-i18n-title="overlapPriorityTitle" title="全フレーム重ね合わせで複数の被写体がはっきり重なったとき、どちらの色を手前に描画するかを選びます(写真の並び順基準)。">
+        <span data-i18n="overlapPriorityLabel">重なった場合の優先順位</span>
         <select id="opt-overlap-priority">
-          <option value="first" selected>先(番号が若い方)を手前に</option>
-          <option value="last">後(番号が大きい方)を手前に</option>
+          <option value="first" data-i18n="overlapPriorityFirst" selected>先(番号が若い方)を手前に</option>
+          <option value="last" data-i18n="overlapPriorityLast">後(番号が大きい方)を手前に</option>
         </select>
       </label>
-      <label class="select" title="動体として検出する塊の最大サイズです。大きくすると人物・動物などの大きな被写体にも対応できますが、ボケた背景を誤検出しやすくなります。">
-        被写体サイズの上限
+      <label class="select" data-i18n-title="maxSubjectAreaTitle" title="動体として検出する塊の最大サイズです。大きくすると人物・動物などの大きな被写体にも対応できますが、ボケた背景を誤検出しやすくなります。">
+        <span data-i18n="maxSubjectAreaLabel">被写体サイズの上限</span>
         <select id="opt-max-subject-area">
-          <option value="0.05">小(鳥など、画面の5%まで)</option>
-          <option value="0.15" selected>中(人物・動物など、画面の15%まで・推奨)</option>
-          <option value="0.4">大(画面の40%まで)</option>
-          <option value="0.9">制限をほぼ外す(画面の90%まで)</option>
+          <option value="0.05" data-i18n="maxSubjectAreaSmall">小(鳥など、画面の5%まで)</option>
+          <option value="0.15" data-i18n="maxSubjectAreaMedium" selected>中(人物・動物など、画面の15%まで・推奨)</option>
+          <option value="0.4" data-i18n="maxSubjectAreaLarge">大(画面の40%まで)</option>
+          <option value="0.9" data-i18n="maxSubjectAreaNone">制限をほぼ外す(画面の90%まで)</option>
         </select>
       </label>
     </div>
 
     <details class="advanced">
-      <summary>詳細設定(通常は既定値のままで問題ありません。項目名にマウスを乗せると説明が出ます)</summary>
+      <summary data-i18n="advancedSummary">詳細設定(通常は既定値のままで問題ありません。項目名にマウスを乗せると説明が出ます)</summary>
       <div class="options">
-        <label class="select" title="位置合わせが成功したとみなす、背景の動きに合致した特徴点マッチ数の下限です。これを下回るフレームは位置合わせ失敗として扱われます。">
-          最小インライア数
+        <label class="select" data-i18n-title="minInliersTitle" title="位置合わせが成功したとみなす、背景の動きに合致した特徴点マッチ数の下限です。これを下回るフレームは位置合わせ失敗として扱われます。">
+          <span data-i18n="minInliersLabel">最小インライア数</span>
           <input type="number" id="opt-min-inliers" value="15" min="1" max="500" step="1" />
         </label>
-        <label class="select" title="rembgのアルファ値のうち、この値未満を信頼できないノイズとして切り捨てます。ボケた背景にうっすら残る誤検出を減らします。">
-          低信頼度アルファの切り捨て閾値
+        <label class="select" data-i18n-title="edgeNoiseFloorTitle" title="rembgのアルファ値のうち、この値未満を信頼できないノイズとして切り捨てます。ボケた背景にうっすら残る誤検出を減らします。">
+          <span data-i18n="edgeNoiseFloorLabel">低信頼度アルファの切り捨て閾値</span>
           <input type="number" id="opt-edge-noise-floor" value="0.08" min="0" max="0.9" step="0.01" />
         </label>
-        <label class="checkbox" title="動きでブレて薄く写った領域の不透明度を底上げし、くっきり表示します。輪郭にわずかな色にじみが出ることがあります。">
+        <label class="checkbox" data-i18n-title="forceOpaqueTitle" title="動きでブレて薄く写った領域の不透明度を底上げし、くっきり表示します。輪郭にわずかな色にじみが出ることがあります。">
           <input type="checkbox" id="opt-force-opaque" checked />
-          被写体を常に不透明にする
+          <span data-i18n="forceOpaqueLabel">被写体を常に不透明にする</span>
         </label>
-        <label class="select" title="「被写体を常に不透明にする」で、この値以上のアルファを完全不透明にします。">
-          不透明化のブースト閾値
+        <label class="select" data-i18n-title="opacityThresholdTitle" title="「被写体を常に不透明にする」で、この値以上のアルファを完全不透明にします。">
+          <span data-i18n="opacityThresholdLabel">不透明化のブースト閾値</span>
           <input type="number" id="opt-opacity-threshold" value="0.15" min="0.01" max="1" step="0.01" />
         </label>
-        <label class="select" title="切り抜きモデルのマットにさらにぼかしを加えます。マットは既に十分滑らかなため、通常は「なし」で問題ありません。">
-          追加の縁ぼかし
+        <label class="select" data-i18n-title="featherTitle" title="切り抜きモデルのマットにさらにぼかしを加えます。マットは既に十分滑らかなため、通常は「なし」で問題ありません。">
+          <span data-i18n="featherLabel">追加の縁ぼかし</span>
           <select id="opt-feather">
-            <option value="0" selected>なし(推奨)</option>
-            <option value="3">3px</option>
-            <option value="5">5px</option>
-            <option value="8">8px</option>
-            <option value="12">12px(輪郭やわらか)</option>
+            <option value="0" data-i18n="featherNone" selected>なし(推奨)</option>
+            <option value="3" data-i18n="feather3">3px</option>
+            <option value="5" data-i18n="feather5">5px</option>
+            <option value="8" data-i18n="feather8">8px</option>
+            <option value="12" data-i18n="feather12">12px(輪郭やわらか)</option>
           </select>
         </label>
-        <label class="checkbox" title="被写体の縁の色から、その写真に元々写っていた背景色の影響を差し引き、合成先の背景との色にじみを防ぎます。">
+        <label class="checkbox" data-i18n-title="decontaminateTitle" title="被写体の縁の色から、その写真に元々写っていた背景色の影響を差し引き、合成先の背景との色にじみを防ぎます。">
           <input type="checkbox" id="opt-decontaminate" checked />
-          色デコンタミネーションを行う
+          <span data-i18n="decontaminateLabel">色デコンタミネーションを行う</span>
         </label>
-        <label class="select" title="色デコンタミネーションの補正量の上限です。大きくすると補正が強く効きますが、過補正による不自然な色ムラが出やすくなります。">
-          デコンタミネーション補正量の上限
+        <label class="select" data-i18n-title="decontamMaxCorrectionTitle" title="色デコンタミネーションの補正量の上限です。大きくすると補正が強く効きますが、過補正による不自然な色ムラが出やすくなります。">
+          <span data-i18n="decontamMaxCorrectionLabel">デコンタミネーション補正量の上限</span>
           <input type="number" id="opt-decontam-max-correction" value="60" min="0" max="255" step="1" />
         </label>
-        <label class="select" title="全フレーム重ね合わせで、複数の被写体が「本当に重なっている」と判定するアルファ値の閾値です。">
-          重なり判定のアルファ閾値
+        <label class="select" data-i18n-title="confidentAlphaThresholdTitle" title="全フレーム重ね合わせで、複数の被写体が「本当に重なっている」と判定するアルファ値の閾値です。">
+          <span data-i18n="confidentAlphaThresholdLabel">重なり判定のアルファ閾値</span>
           <input type="number" id="opt-confident-alpha-threshold" value="0.5" min="0" max="1" step="0.01" />
         </label>
-        <label class="select" title="被写体同士が重なる境界で、色の切り替わりをなめらかにブレンドする幅(px)です。">
-          重なり境界のブレンド幅(px)
+        <label class="select" data-i18n-title="overlapBlendSigmaTitle" title="被写体同士が重なる境界で、色の切り替わりをなめらかにブレンドする幅(px)です。">
+          <span data-i18n="overlapBlendSigmaLabel">重なり境界のブレンド幅(px)</span>
           <input type="number" id="opt-overlap-blend-sigma" value="18" min="0" max="200" step="1" />
         </label>
       </div>
     </details>
 
     <div class="actions">
-      <button id="run-btn" disabled>処理を実行</button>
-      <button id="reset-btn" type="button" class="secondary-btn">リセット</button>
+      <button id="run-btn" data-i18n="runButton" disabled>処理を実行</button>
+      <button id="reset-btn" type="button" class="secondary-btn" data-i18n="resetButton">リセット</button>
     </div>
     <div id="progress" class="progress" hidden>
       <div class="progress-bar-track"><div id="progress-bar" class="progress-bar"></div></div>
@@ -119,36 +122,37 @@
 
   <section class="panel" id="results-panel" hidden>
     <div class="results-header">
-      <h2>結果</h2>
-      <a id="download-all-link" class="button-link" hidden download>すべてダウンロード (.zip)</a>
+      <h2 data-i18n="resultsHeading">結果</h2>
+      <a id="download-all-link" class="button-link" data-i18n="downloadAllLink" hidden download>すべてダウンロード (.zip)</a>
     </div>
     <div id="warnings" class="warnings" hidden></div>
 
-    <h3>位置合わせ&クロップ画像</h3>
+    <h3 data-i18n="alignedHeading">位置合わせ&クロップ画像</h3>
     <div id="results-grid" class="grid"></div>
 
     <div id="composite-all-card" class="merged-card" hidden>
-      <h3>被写体を残した合成画像(全フレーム重ね合わせ)</h3>
-      <img id="composite-all-img" alt="被写体入り合成画像(全フレーム重ね合わせ)" />
-      <a id="composite-all-download" class="button-link" download>ダウンロード</a>
+      <h3 data-i18n="compositeAllHeading">被写体を残した合成画像(全フレーム重ね合わせ)</h3>
+      <img id="composite-all-img" data-i18n-alt="compositeAllAlt" alt="被写体入り合成画像(全フレーム重ね合わせ)" />
+      <a id="composite-all-download" class="button-link" data-i18n="downloadButton" download>ダウンロード</a>
     </div>
 
     <div id="merged-card" class="merged-card" hidden>
-      <h3>合成背景のみ</h3>
-      <img id="merged-img" alt="合成背景画像" />
-      <a id="merged-download" class="button-link" download>ダウンロード</a>
+      <h3 data-i18n="mergedHeading">合成背景のみ</h3>
+      <img id="merged-img" data-i18n-alt="mergedAlt" alt="合成背景画像" />
+      <a id="merged-download" class="button-link" data-i18n="downloadButton" download>ダウンロード</a>
     </div>
   </section>
 
   <footer class="footer-note">
     <p>
-      <a href="https://github.com/MeiNogizaka/BurstAlignImage" target="_blank" rel="noopener noreferrer">オリジナル(サーバー版)</a>
-      の処理をブラウザ内(WebAssembly)で再現した非公式Web版です。
+      <span data-i18n="footerOriginalPrefix"></span>
+      <a href="https://github.com/MeiNogizaka/BurstAlignImage" target="_blank" rel="noopener noreferrer" data-i18n="footerOriginalLink">オリジナル(サーバー版)</a>
+      <span data-i18n="footerOriginalSuffix">の処理をブラウザ内(WebAssembly)で再現した非公式Web版です。</span>
     </p>
     <p>
-      気に入っていただけたら、
-      <a href="https://www.amazon.jp/hz/wishlist/ls/NVDKDUBBHW1?ref_=wl_share" target="_blank" rel="noopener noreferrer">ほしいものリスト</a>
-      からの応援も歓迎です。
+      <span data-i18n="footerWishlistPrefix">気に入っていただけたら、</span>
+      <a href="https://www.amazon.jp/hz/wishlist/ls/NVDKDUBBHW1?ref_=wl_share" target="_blank" rel="noopener noreferrer" data-i18n="footerWishlistLink">ほしいものリスト</a>
+      <span data-i18n="footerWishlistSuffix">からの応援も歓迎です。</span>
     </p>
   </footer>
 </main>
