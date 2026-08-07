@@ -56,11 +56,16 @@ export async function runPipeline(
   }
 
   const filenames = files.map((f) => f.name);
-  const images = files.map((f) => bitmapToMatBGR(cv, f.bitmap));
-  for (const f of files) f.bitmap.close();
-
   const refIndex = options.referenceIndex;
-  const refImg = images[refIndex];
+
+  // Frames are decoded one at a time, right before they're needed, instead of all up front --
+  // for many large photos, holding every raw decode alive for the whole align loop (on top of
+  // the warped Mats accumulating alongside them) was itself a significant chunk of OpenCV.js's
+  // limited WASM-heap budget. Each non-reference frame's raw decode is deleted the moment it's
+  // done with (warped, or rejected as a failed alignment), so at most one extra full-resolution
+  // Mat is ever alive on top of the growing warped set.
+  const refImg = bitmapToMatBGR(cv, files[refIndex].bitmap);
+  files[refIndex].bitmap.close();
   const refH = refImg.rows;
   const refW = refImg.cols;
 
@@ -88,7 +93,10 @@ export async function runPipeline(
       continue;
     }
 
-    const gray = align.toGrayClahe(cv, images[i]);
+    const img = bitmapToMatBGR(cv, files[i].bitmap);
+    files[i].bitmap.close();
+
+    const gray = align.toGrayClahe(cv, img);
     const { mat: small, scale } = align.downscaleForMatching(cv, gray, 1600);
     gray.delete();
     const { keypoints: kp, descriptors: des } = align.detectAndDescribe(cv, small, 4000);
@@ -100,6 +108,7 @@ export async function runPipeline(
     des.delete();
 
     if (Hscaled === null || inliers < options.minInliers) {
+      img.delete();
       const reason = `only ${inliers}/${options.minInliers} required inlier matches after RANSAC`;
       frameEntries.push({ filename: filenames[i], status: "failed", inliers, reason, warped: null });
       report("align", i + 1, n);
@@ -107,20 +116,14 @@ export async function runPipeline(
     }
 
     const Hfull = align.rescaleHomography(Hscaled, refScale, scale);
-    const { warped, mask } = align.warpAndMask(cv, images[i], Hfull, refW, refH);
+    const { warped, mask } = align.warpAndMask(cv, img, Hfull, refW, refH);
+    img.delete();
     masks.push(mask);
     frameEntries.push({ filename: filenames[i], status: "ok", inliers, reason: null, warped });
     report("align", i + 1, n);
   }
   refKp.delete();
   refDes.delete();
-
-  // Free original (un-warped) frames now that warping is done. The reference frame is skipped
-  // here -- it's reused as-is (already in its own coordinate system) via frameEntries[refIndex].warped
-  // === refImg, and is deleted later once cropping is done.
-  for (let i = 0; i < n; i++) {
-    if (i !== refIndex) images[i].delete();
-  }
 
   const okEntries = frameEntries.filter((f) => f.status !== "failed");
   if (okEntries.length === 0) {
@@ -146,6 +149,12 @@ export async function runPipeline(
     let outputName: string | null = null;
     if (fr.status !== "failed" && fr.warped) {
       const crop = align.cropMat(cv, fr.warped, cropRect);
+      // Free the full-frame warped Mat the moment it's cropped, rather than batching
+      // deletion after this whole loop -- otherwise every frame's full-size warped Mat and
+      // its (near-full-size) cropped Mat are briefly alive together, close to doubling peak
+      // WASM-heap usage right when JPEG-encoding each one adds its own transient Mats on top.
+      fr.warped.delete();
+      fr.warped = null;
       croppedFrames.push(crop);
       croppedNames.push(fr.filename);
       if (options.outputAligned) {
@@ -165,7 +174,6 @@ export async function runPipeline(
       thumbBlob,
     });
   }
-  for (const fr of frameEntries) fr.warped?.delete();
 
   const warnings: string[] = [];
   for (const fr of frameEntries) {

@@ -126,9 +126,18 @@ export type WorkerResponse = ProgressMessage | ResultMessage | ErrorMessage | Mo
 
 // --- ingest safety limits (client-side equivalents of the server's) ------
 
-export const MAX_FILES = 15;
+export const MAX_FILES = 8;
 export const MIN_FILES = 2;
 export const MAX_FILE_BYTES = 40 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 250 * 1024 * 1024;
+// Hard reject above this (decompression-bomb guard); anything between this and
+// MAX_PROCESSING_PIXELS is downscaled instead of rejected, see decodeUploadedFile.
 export const MAX_TOTAL_PIXELS = 150_000_000;
-export const MAX_LONG_EDGE_PX = 8000;
+// The full pipeline holds roughly one working-resolution copy of every uploaded frame
+// simultaneously (for median-stack background generation, which is inherent to the
+// algorithm -- not something this port can avoid without changing its behavior). That
+// competes for OpenCV.js's WASM heap, which has a much lower ceiling than the browser
+// tab's regular memory -- multi-frame bursts above ~20MP/frame were observed to exhaust
+// it. Anything larger is downscaled to this many pixels (aspect ratio preserved) on
+// ingest, trading maximum output resolution for reliability.
+export const MAX_PROCESSING_PIXELS = 20_000_000;

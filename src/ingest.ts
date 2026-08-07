@@ -2,7 +2,7 @@
 // only needs browser-native File/ImageBitmap APIs, so it stays out of the
 // worker and its result (an ImageBitmap) is handed to the worker via a
 // transferable postMessage.
-import { MAX_FILE_BYTES, MAX_LONG_EDGE_PX, MAX_TOTAL_PIXELS } from "./shared";
+import { MAX_FILE_BYTES, MAX_PROCESSING_PIXELS, MAX_TOTAL_PIXELS } from "./shared";
 
 export class IngestError extends Error {}
 
@@ -38,16 +38,19 @@ export async function decodeUploadedFile(file: File): Promise<ImageBitmap> {
   }
 
   const { width, height } = probe;
-  if (width * height > MAX_TOTAL_PIXELS) {
+  const totalPixels = width * height;
+  if (totalPixels > MAX_TOTAL_PIXELS) {
     probe.close();
     throw new IngestError(`画像の解像度が大きすぎます: ${file.name} (${width}x${height})`);
   }
 
-  if (Math.max(width, height) <= MAX_LONG_EDGE_PX) {
+  if (totalPixels <= MAX_PROCESSING_PIXELS) {
     return probe;
   }
 
-  const scale = MAX_LONG_EDGE_PX / Math.max(width, height);
+  // Downscale to at most MAX_PROCESSING_PIXELS total pixels, aspect ratio preserved --
+  // this is the memory-budget cap (see MAX_PROCESSING_PIXELS), not the bomb guard above.
+  const scale = Math.sqrt(MAX_PROCESSING_PIXELS / totalPixels);
   const targetW = Math.max(1, Math.round(width * scale));
   const targetH = Math.max(1, Math.round(height * scale));
   probe.close();

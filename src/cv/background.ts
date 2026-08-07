@@ -20,7 +20,7 @@ export function medianStack(cv: CV, mats: any[]): any {
 
   for (let i = 0; i < size; i++) {
     for (let k = 0; k < n; k++) tmp[k] = buffers[k][i];
-    // insertion sort -- n is at most MAX_FILES (15), so this beats a generic
+    // insertion sort -- n is at most MAX_FILES (8), so this beats a generic
     // comparator sort's per-call overhead run size*channels times.
     for (let a = 1; a < n; a++) {
       const v = tmp[a];
