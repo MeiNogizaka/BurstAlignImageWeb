@@ -29,7 +29,7 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   feather: 0,
   forceOpaque: true,
   overlapPriority: "first",
-  maxSubjectArea: 0.03,
+  maxSubjectArea: 0.15,
   decontaminate: true,
   edgeNoiseFloor: 0.08,
   opacityThreshold: 0.15,
