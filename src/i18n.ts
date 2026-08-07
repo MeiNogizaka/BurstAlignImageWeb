@@ -153,7 +153,7 @@ const dict: Record<Lang, Record<string, string>> = {
     // Footer
     footerOriginalPrefix: "",
     footerOriginalLink: "オリジナル(サーバー版)",
-    footerOriginalSuffix: "の処理をブラウザ内(WebAssembly)で再現した非公式Web版です。",
+    footerOriginalSuffix: "の処理をブラウザ内(WebAssembly)で再現したWeb版です。",
     footerWishlistPrefix: "気に入っていただけたら、",
     footerWishlistLink: "ほしいものリスト",
     footerWishlistSuffix: "からの応援も歓迎です。",
@@ -264,7 +264,7 @@ const dict: Record<Lang, Record<string, string>> = {
     openCvLoadFailed: "Failed to load OpenCV.js (HTTP {status})",
     matteModelFetchFailed: "Failed to fetch the subject-cutout model (HTTP {status})",
 
-    footerOriginalPrefix: "This is an unofficial web version that reproduces the processing of the ",
+    footerOriginalPrefix: "This is a web version that reproduces the processing of the ",
     footerOriginalLink: "original (server version)",
     footerOriginalSuffix: " entirely in the browser (WebAssembly).",
     footerWishlistPrefix: "If you like this tool, ",
