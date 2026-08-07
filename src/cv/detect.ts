@@ -53,20 +53,20 @@ export function foregroundMask(
   const cols = frameBgr.cols;
   const n = rows * cols;
 
+  // Lab conversion of an 8-bit BGR image is itself 8-bit -- align.py's `.astype(np.float32)`
+  // right after doesn't add any precision, it only widens the storage type so the later
+  // arithmetic (which can go negative or outside 0-255 before clipping) doesn't wrap around.
+  // JS `number` is already double-precision, so reading straight out of the 8-bit buffers below
+  // and doing the same arithmetic on plain numbers is numerically identical -- while skipping
+  // two full-resolution 3-channel float32 copies (rows*cols*3*4 bytes each; ~240MB for a single
+  // 24MP frame) that were large enough to exhaust OpenCV.js's WASM heap on real-world photos.
   const frameLab8 = new cv.Mat();
   cv.cvtColor(frameBgr, frameLab8, cv.COLOR_BGR2Lab);
   const bgLab8 = new cv.Mat();
   cv.cvtColor(backgroundBgr, bgLab8, cv.COLOR_BGR2Lab);
 
-  const frameLab = new cv.Mat();
-  frameLab8.convertTo(frameLab, cv.CV_32FC3);
-  const bgLab = new cv.Mat();
-  bgLab8.convertTo(bgLab, cv.CV_32FC3);
-  frameLab8.delete();
-  bgLab8.delete();
-
-  const frameData: Float32Array = frameLab.data32F;
-  const bgData: Float32Array = bgLab.data32F;
+  const frameData: Uint8Array = frameLab8.data;
+  const bgData: Uint8Array = bgLab8.data;
 
   // Least-squares fit of a global L-channel gain (a,b so that a*x+b ~= y),
   // sampled every 37th pixel -- matches _fit_linear_gain's `[::37]` on the
@@ -106,8 +106,8 @@ export function foregroundMask(
     d = d < 0 ? 0 : d > 255 ? 255 : d;
     diffData[i] = d; // truncates toward zero, matching `.astype(np.uint8)`
   }
-  frameLab.delete();
-  bgLab.delete();
+  frameLab8.delete();
+  bgLab8.delete();
 
   const blurred = new cv.Mat();
   cv.GaussianBlur(diffU8, blurred, new cv.Size(0, 0), 3);

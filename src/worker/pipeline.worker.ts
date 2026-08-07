@@ -37,12 +37,30 @@ async function buildZip(result: PipelineResult): Promise<Blob | null> {
   return new Blob([zipped], { type: "application/zip" });
 }
 
+/** OpenCV.js's embind bindings surface a C++-level `cv::Exception` as a bare number (a pointer
+ * into the WASM heap), not a JS Error -- `String(err)` on that is a meaningless digit string.
+ * `cv.exceptionFromPtr` (present on the loaded module once available) decodes it back into a
+ * real message. */
+function describeError(err: unknown, cv: any): string {
+  if (typeof err === "number" && cv?.exceptionFromPtr) {
+    try {
+      const decoded = cv.exceptionFromPtr(err);
+      if (decoded?.msg) return decoded.msg;
+    } catch {
+      // fall through to the generic cases below
+    }
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 ctx.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
   const msg = event.data;
   if (msg.type !== "run") return;
 
+  let cv: any;
   try {
-    const cv = await loadCv();
+    cv = await loadCv();
 
     const result = await runPipeline(
       cv,
@@ -60,6 +78,6 @@ ctx.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
 
     post({ type: "result", result });
   } catch (err) {
-    post({ type: "error", message: err instanceof Error ? err.message : String(err) });
+    post({ type: "error", message: describeError(err, cv) });
   }
 });
